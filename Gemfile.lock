@@ -7,6 +7,8 @@ GEM
       rubyzip
     httpclient (2.8.3)
     rubyzip (1.2.0)
+    zip-zip (0.3)
+      rubyzip (>= 1.0.0)
 
 PLATFORMS
   ruby
@@ -14,6 +16,7 @@ PLATFORMS
 DEPENDENCIES
   eeepub
   httpclient
+  zip-zip
 
 BUNDLED WITH
    1.14.1
