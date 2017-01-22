@@ -6,4 +6,4 @@ source "https://rubygems.org"
 #gem 'digest/sha1'
 gem 'eeepub'
 gem 'httpclient'
-gem 'zip'
+gem 'zip-zip'
