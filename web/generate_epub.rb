@@ -1,4 +1,4 @@
-# Script for converting the web-site to an epub-book   
+# Script for converting the web-site to an epub-book
 # builds upon and extends the 'big collection of hacks' that is generate.rb in the same rogue spirit.
 
 # Contributed by Simen Svale Skogsrud january 2011
@@ -10,14 +10,14 @@ require 'pp'
 require 'cgi'
 require 'digest/sha1'
 
-begin 
+begin
   require 'eeepub'
 rescue LoadError
-  puts "Sorry! You need to 'gem install eeepub' first!"
+  puts "Sorry! You need to 'gem install eeepub' first! Have you installed a compatible version of the rubyzip gem, which is an eeepub dependency?"
   exit
 end
 
-begin 
+begin
   require 'httpclient'
 rescue LoadError
   puts "Sorry! You need to 'gem install httpclient' first!"
@@ -26,24 +26,51 @@ end
 
 OUTPUT_DIR = "web/epub_temp"
 
+=begin
 # Returns the svg for the latex expression
 def render_svg(latex)
   client = HTTPClient.new
-  wrapped_svg=client.get_content("http://mathcache.appspot.com/?tex=#{CGI.escape(latex)}&svgcb=x")
+  wrapped_svg=client.get_content("http://www.wiris.net/demo/editor/render.png?&latex=#{latex}")
   wrapped_svg =~ (/".+":\s"(.*)\"\}\)/)
   return $1.gsub('\"','"')
 end
+=end
 
 # Renders the provided latex markup into a file with the given name
 def render_latex_as_image(latex, filename)
-  url = "http://mathcache.appspot.com/?tex=#{CGI.escape('\\png \\small \\parstyle '+latex)}"
+#  latex = "Error_{ocurred}"
+ latex.gsub!(/^\$|\$$/, '').gsub!(/\\/, '/')
+#  url = "http://mathcache.appspot.com/?tex=#{CGI.escape('\\png \\small \\parstyle '+latex)}"
+#  url = "http://www.wiris.net/demo/editor/render?format=svg&latex=#{CGI.escape(latex)}"
+
+# generate png file
+  url = "http://www.wiris.net/demo/editor/render.png?&latex=#{latex}"
   client = HTTPClient.new
-  binary_data = client.get_content(url)
-  File.open("#{OUTPUT_DIR}/#{filename}", 'w') do |file| 
-    file << binary_data  
+  begin
+    binary_data = client.get_content(url)
+  rescue
+    puts "PNG-ERROR_#LATEX_OUTPUT<#{latex.to_s}>"
+    latex = "Error_{ocurred}"
+    url = "http://www.wiris.net/demo/editor/render.png?&latex=#{latex}"
+    binary_data = client.get_content(url)
   end
-  File.open("#{OUTPUT_DIR}/#{filename.gsub('.png', '.svg')}", 'w') do |file| 
-    file << render_svg(latex)
+  File.open("#{OUTPUT_DIR}/#{filename}", 'w') do |file|
+    file << binary_data
+  end
+
+# generate svg file
+  url = "http://www.wiris.net/demo/editor/render.svg?&latex=#{latex}"
+  client = HTTPClient.new
+  begin
+    binary_data = client.get_content(url)
+  rescue
+    puts "PNG-ERROR_#LATEX_OUTPUT<#{latex.to_s}>"
+    latex = "Error_{ocurred}"
+    url = "http://www.wiris.net/demo/editor/render.svg?&latex=#{latex}"
+    binary_data = client.get_content(url)
+  end
+  File.open("#{OUTPUT_DIR}/#{filename.gsub('.png', '.svg')}", 'w') do |file|
+    file << binary_data
   end
 end
 
@@ -59,11 +86,11 @@ end
 # Convert a file headed for the web into an epub-compliant thing
 def epubize_file(filename)
   puts "Epubizing #{filename}"
-  text = File.read(filename)  
+  text = File.read(filename)
   # Strip template code
-  text.gsub!(/\<\%[^%]*\%\>\s*/, '')       
+  text.gsub!(/\<\%[^%]*\%\>\s*/, '')
   # Strip breadcrumbs
-  text.gsub!(/\<div class\=\'breadcrumb\'\>.*?\<\/div\>/m,'')  
+  text.gsub!(/\<div class\=\'breadcrumb\'\>.*?\<\/div\>/m,'')
   # Change name attributes to id attributes, cause epub wants it that way
   text.gsub!(/\<a\s+name\=/, "<a id=")
   # Remove path from internal links
@@ -71,7 +98,7 @@ def epubize_file(filename)
   # Remove download links
   text.gsub!(/<div class='download_src'>.*?Download Source<\/a><\/div>/, '')
   replace_latex_with_image_tags(text)
-  # Wrap in suitable XHTML skeleton  
+  # Wrap in suitable XHTML skeleton
   text = <<-END
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
@@ -86,7 +113,7 @@ def epubize_file(filename)
       #{text}
     </div>
   </body>
-</html>  
+</html>
 END
   File.open(filename, 'w') << text
 end
@@ -94,7 +121,7 @@ end
 # Buld the list of sub-pages to a topic for an epub 'nav' array
 def nav_for_topic(topic, label, folder_prefix_letter)
   item = {:label => label,
-   :content => "#{topic}.html"}     
+   :content => "#{topic}.html"}
   lines = get_all_data_lines("book/c_#{topic}.tex")
   data = general_process_file(lines)
   subpages = collect_subpages_for_page(data)
@@ -126,7 +153,7 @@ def build_navigation_map
   # Algorithms
   result += (ALGORITHM_CHAPTERS).map do |topic|
     nav_for_topic(topic, "#{topic.capitalize} Algorithms", 'a')
-  end  
+  end
   # Extensions
   result += [nav_for_topic('advanced', 'Advanced Topics', 'c')]
   # Appendix
@@ -152,7 +179,7 @@ end
 def replace_png_links_with_inline_svg
   Dir.glob("./#{OUTPUT_DIR}/**/*.html").each do |filename|
     text = File.read(filename)
-    text.gsub!(/<img class='math' src='LaTeX([0-9a-f]+)\.png'\/>/) do |digest|      
+    text.gsub!(/<img class='math' src='LaTeX([0-9a-f]+)\.png'\/>/) do |digest|
       svg = File.read("./#{OUTPUT_DIR}/LaTeX#{$1}.svg")
       svg.gsub!(/\<\?xml.*?dtd'\>/, '')
       svg
@@ -166,7 +193,7 @@ end
 if __FILE__ == $0
   # create dir
   create_directory(OUTPUT_DIR)
-  # load the bib 
+  # load the bib
   bib = load_bibtex()
   # TOC
   # build_toc(ALGORITHM_CHAPTERS, FRONT_MATTER)
@@ -174,14 +201,14 @@ if __FILE__ == $0
   build_copyright()
   FRONT_MATTER.each {|name| build_chapter(bib, name) }
   # introduction chapter
-  build_chapter(bib, "c_introduction")  
+  build_chapter(bib, "c_introduction")
   # process algorithm chapters
   ALGORITHM_CHAPTERS.each {|name| build_algorithm_chapter(name, bib) }
-  # advaced topics 
-  build_advanced_chapter(bib)  
+  # advaced topics
+  build_advanced_chapter(bib)
   # appendix
-  build_appendix(bib) 
-                            
+  build_appendix(bib)
+
   puts "Epubizing html-files"
   Dir.glob("./#{OUTPUT_DIR}/**/*.html").each do |file|
     epubize_file(file)
@@ -189,21 +216,21 @@ if __FILE__ == $0
 
   # ruby files
   get_ruby_into_position(ALGORITHM_CHAPTERS)
-  
+
   puts "Build navigation map"
   navigation_map = build_navigation_map
-  pp navigation_map 
-  
+  pp navigation_map
+
   # Extract the order of the html-files from the nav-map
   ordered_html_files = navigation_map.map{|item| pp item; [item]+(item[:nav] || []) }.flatten.map{|i| i[:content] }
   # And remap them to the file hierarchy
   ordered_html_files = ordered_html_files.map{|file| Dir.glob("./#{OUTPUT_DIR}/**/#{file}").first }
-  
+
   epub = EeePub.make do
     title       'Clever Algorithms'
     creator     'Jason Brownlee'
     publisher   'cleveralgoritms.com'
-    date        Time.now.strftime("%Y-%m-%d")    
+    date        Time.now.strftime("%Y-%m-%d")
     identifier  'urn:uuid:978-1-4467-8506-5-x', :scheme => 'ISBN'
     uid         'http://www.cleveralgorithms.com/'
 
@@ -219,7 +246,7 @@ if __FILE__ == $0
     title       'Clever Algorithms'
     creator     'Jason Brownlee'
     publisher   'cleveralgoritms.com'
-    date        Time.now.strftime("%Y-%m-%d")    
+    date        Time.now.strftime("%Y-%m-%d")
     identifier  'urn:uuid:978-1-4467-8506-5-x', :scheme => 'ISBN'
     uid         'http://www.cleveralgorithms.com/'
 
@@ -229,4 +256,3 @@ if __FILE__ == $0
   puts "Building epub file with LaTeX in svgs"
   epub.save('CleverAlgorithms_svg.epub')
 end
-
